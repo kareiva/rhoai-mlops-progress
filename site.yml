@@ -1,0 +1,106 @@
+---
+- name: AI500 progress meter
+  hosts: all
+  connection: local
+  vars:
+    pre_check_day: 'Monday'
+
+  gather_facts: false
+  tasks:
+    - name: Check the calendar
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - 'date_time'
+
+    - name: "### 0. When the Cluster Starts (only check on {{ pre_check_day }}) ###"
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ inventory_hostname }}-jukebox"
+        name: "{{ item }}"
+      register: pre_list
+      loop:
+        - ds-pipeline-dspa
+        - ds-pipeline-metadata-envoy-dspa
+        - ds-pipeline-metadata-grpc-dspa
+        - ds-pipeline-persistenceagent-dspa
+        - ds-pipeline-scheduledworkflow-dspa
+        - ds-pipeline-workflow-controller-dspa
+        - feast-ui-feast-feature-server
+        - feature-store
+        - mariadb-dspa
+        - minio
+        - "{{ inventory_hostname }}-registry-db"
+      when: ansible_date_time.weekday == pre_check_day
+
+    - name: "## 0.1. Check for cluster prerequisites ##"
+      ansible.builtin.fail:
+        msg: "Failed item is {{ item['item'] }}"
+      loop: "{{ pre_list['results'] }}"
+      loop_control:
+        label: "{{ item['item'] }}"
+      when:
+        - ansible_date_time.weekday == pre_check_day
+        - resources in item
+        - item['resources'] | length == 0
+
+
+    - name: "### 1. When the Music Starts ###"
+      kubernetes.core.k8s_info:
+        kind: StatefulSet
+        namespace: "{{ inventory_hostname }}-jukebox"
+        name: "{{ inventory_hostname }}-hitmusic-wb"
+      register: ss1_list
+
+    - name: '## 1.1 Check for silence ##'
+      ansible.builtin.fail:
+        msg: "1.1. The hitmusic-wb workbench is not playing for {{ inventory_hostname }}"
+      when: ss1_list['resources'] | length == 0
+
+
+    - name: "### 2. In the Rhythm of Data ###"
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Workflow
+        namespace: "{{ inventory_hostname }}-jukebox"
+        label_selectors:
+          - "workflows.argoproj.io/phase = Succeeded"
+      register: wf1_list
+
+    - name: '## 2.1. Check for pipelines ##'
+      ansible.builtin.fail:
+        msg: "2.1. KFP training pipeline (workflow) is not complete for {{ inventory_hostname }}"
+      when: wf1_list['resources'] | map(attribute='metadata.name') | select('match', '^kfp-training-pipeline') | length == 0
+
+    - name: "### 3. From Studio To Stage ###"
+      kubernetes.core.k8s_info:
+        kind: StatefulSet
+        namespace: "{{ inventory_hostname }}-jukebox"
+        name: "{{ inventory_hostname }}-mlops-toolings"
+      register: ss2_list
+
+    - name: '## 3.1. Check for code-server ##'
+      ansible.builtin.fail:
+        msg: "3.1. The code-server is not running for {{ inventory_hostname }}"
+      when: ss2_list['resources'] | length == 0
+
+    - name: '## 3.2. Check for AppProjects ##'
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: AppProject
+        namespace: "{{ inventory_hostname }}-toolings"
+        name: "{{ item }}"
+      loop:
+        - jukebox-prod-project
+        - jukebox-test-project
+        - mlops-toolings-project
+      register: app_list
+
+    - name: "## 3.2 Check for AppProjects ##"
+      ansible.builtin.fail:
+        msg: "AppProject {{ item['item'] }} is missing for {{ inventory_hostname }}"
+      when:
+        - item['resources'] | length == 0
+      loop: "{{ app_list['results'] }}"
+      loop_control:
+        label: "{{ item['item'] }}"
