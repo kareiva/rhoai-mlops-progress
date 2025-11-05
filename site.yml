@@ -72,6 +72,29 @@
         msg: "2.1. KFP training pipeline (workflow) is not complete for {{ inventory_hostname }}"
       when: wf1_list['resources'] | map(attribute='metadata.name') | select('match', '^kfp-training-pipeline') | length == 0
 
+
+    - name: '## 2.2. Check for InferenceService ##'
+      kubernetes.core.k8s_info:
+        api_version: serving.kserve.io/v1beta1
+        kind: InferenceService
+        name: "jukebox"
+        namespace: "{{ item }}"
+      register: isvc_list
+      loop:
+        - "{{ inventory_hostname }}-jukebox"
+        - "{{ inventory_hostname }}-test"
+        - "{{ inventory_hostname }}-prod"
+
+    - name: '## 2.2. Check for InferenceService deployments ##'
+      ansible.builtin.fail:
+        msg: "jukebox InferenceService is missing in {{ item['item'] }}"
+      when:
+        - item['resources'] | length == 0
+      loop: "{{ isvc_list['results'] }}"
+      loop_control:
+        label: "{{ item['item'] }}"
+
+
     - name: "### 3. From Studio To Stage ###"
       kubernetes.core.k8s_info:
         kind: StatefulSet
