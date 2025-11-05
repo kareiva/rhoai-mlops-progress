@@ -12,6 +12,8 @@
         gather_subset:
           - '!all'
           - 'date_time'
+      delegate_to: localhost
+      run_once: true
 
     - name: "### 0. When the Cluster Starts (only check on {{ pre_check_day }}) ###"
       kubernetes.core.k8s_info:
