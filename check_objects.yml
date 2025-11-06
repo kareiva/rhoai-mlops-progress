@@ -1,0 +1,21 @@
+---
+- name: "Retrieve wanted resources"
+  kubernetes.core.k8s_info:
+    api_version: "{{ check_api_version | default(omit) }}"
+    kind: "{{ check_kind }}"
+    namespace: "{{ check_namespace }}"
+    name: "{{ item }}"
+  register: check_list
+  loop: "{{ check_loop_items }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Fail if items are not found"
+  ansible.builtin.fail:
+    msg: "Failed item is {{ check_kind }} in namespace {{ check_namespace }}"
+  loop: "{{ check_list['results'] }}"
+  loop_control:
+    label: "{{ item['item'] }}"
+  when: ("resources" not in item) or (item['resources'] | length == 0)
+
+
