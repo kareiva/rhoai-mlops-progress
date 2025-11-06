@@ -191,6 +191,22 @@
       loop_control:
         loop_var: loop_env
 
+    - name: '## Check and score how many predictors have been deployed ##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_kind: Deployment
+        check_namespace: "{{ loop_env }}"
+        check_loop_items:
+          - "jukebox-predictor-00001-deployment"
+          - "jukebox-predictor-00002-deployment"
+          - "jukebox-predictor-00003-deployment"
+      loop:
+        - "{{ inventory_hostname }}-test"
+        - "{{ inventory_hostname }}-prod"
+      loop_control:
+        loop_var: loop_env
+
+
 - name: Show the survivor scores
   hosts: all
   gather_facts: no
