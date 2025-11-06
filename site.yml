@@ -3,7 +3,6 @@
   hosts: all
   connection: local
   vars:
-    pre_check_day: 'Monday'
 
   gather_facts: false
   tasks:
@@ -16,7 +15,7 @@
       run_once: true
 
 
-    - name: "### 0. When the Cluster Starts (only check on {{ pre_check_day }}) ###"
+    - name: "### 0. When the Cluster Starts ###"
       ansible.builtin.include_tasks: check_objects.yml
       vars:
         check_kind: Deployment
@@ -34,7 +33,7 @@
           - mariadb-dspa
           - minio
           - "{{ inventory_hostname }}-registry-db"
-      when: ansible_date_time.weekday == pre_check_day
+      when: ansible_date_time.weekday == 'Monday'
 
     - name: "### 1. When the Music Starts ###"
       ansible.builtin.include_tasks: check_objects.yml
@@ -55,6 +54,7 @@
         check_namespace: "{{ inventory_hostname }}-jukebox"
         check_loop_items:
           - "{{ inventory_hostname }}-hitmusic-wb"
+      when: ansible_date_time.weekday == 'Monday' or ansible_date_time.weekday == 'Tuesday'
 
 
     - name: '## 2.2. Check for InferenceService ##'
@@ -71,6 +71,8 @@
           - "prod"
       loop_control:
         loop_var: loop_env
+      # let's ignore this for a while because isvc on jukebox is not required
+      ignore_errors: True
 
     - name: "### 3.1 From Studio To Stage ###"
       ansible.builtin.include_tasks: check_objects.yml
@@ -91,3 +93,82 @@
           - jukebox-prod-project
           - jukebox-test-project
           - mlops-toolings-project
+
+    - name: '## 3.2. Check for AppProjects ##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: argoproj.io/v1alpha1
+        check_kind: AppProject
+        check_namespace: "{{ inventory_hostname }}-toolings"
+        check_loop_items:
+          - jukebox-prod-project
+          - jukebox-test-project
+          - mlops-toolings-project
+ 
+    - name: '## 3.3. Check for Model Registries ##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: route.openshift.io/v1
+        check_kind: Route
+        check_namespace: "rhoai-model-registries"
+        check_loop_items:
+          - "{{ inventory_hostname }}-registry-https"
+          - "{{ inventory_hostname }}-prod-registry-https"
+ 
+     
+    - name: '## 3.4. Check for Jukebox UI routes ##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: route.openshift.io/v1
+        check_kind: Route
+        check_namespace: "{{ loop_env }}"
+        check_loop_items:
+          - "jukebox-ui"
+      loop:
+        - "{{ inventory_hostname }}-test"
+        - "{{ inventory_hostname }}-prod"
+      loop_control:
+        loop_var: loop_env
+      
+    - name: '## 3.5. Check for Continuous Training Pipelines ##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: tekton.dev/v1
+        check_kind: Pipeline
+        check_namespace: "{{ inventory_hostname }}-toolings"
+        check_loop_items:
+          - "ct-pipeline"
+          - "ct-alert-pipeline"
+          - "post-prod-deploy-pipeline"
+
+    - name: '## 4.1. Check for Sound! Grafana and Monitoring##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: grafana.integreatly.org/v1beta1
+        check_kind: Grafana
+        check_namespace: "{{ inventory_hostname }}-toolings"
+        check_loop_items:
+          - "jukebox-grafana"
+
+    - name: '## 4.1. Check for Sound! Grafana and Monitoring##'
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: grafana.integreatly.org/v1beta1
+        check_kind: GrafanaDashboard
+        check_namespace: "{{ inventory_hostname }}-toolings"
+        check_loop_items:
+          - "grafana-trusty-dashboard"
+
+    - name: '## 4.2. Check for ALARMS! Prometheus Alerting ##' 
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: monitoring.coreos.com/v1
+        check_kind: PrometheusRule
+        check_namespace: "{{ loop_env }}"
+        check_loop_items:
+          - "jukebox-alerts"
+      loop:
+        - "{{ inventory_hostname }}-test"
+        - "{{ inventory_hostname }}-prod"
+      loop_control:
+        loop_var: loop_env
