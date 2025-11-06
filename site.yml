@@ -2,6 +2,7 @@
 - name: AI500 progress meter
   hosts: all
   connection: local
+  order: sorted
   vars:
 
   gather_facts: false
@@ -14,6 +15,9 @@
       delegate_to: localhost
       run_once: true
 
+    - name: Start scoring
+      ansible.builtin.set_fact:
+        score: 0
 
     - name: "### 0. When the Cluster Starts ###"
       ansible.builtin.include_tasks: check_objects.yml
@@ -71,11 +75,11 @@
           - "prod"
       loop_control:
         loop_var: loop_env
-      # let's ignore this for a while because isvc on jukebox is not required
-      ignore_errors: True
 
     - name: "### 3.1 From Studio To Stage ###"
       ansible.builtin.include_tasks: check_objects.yml
+      tags:
+        - never
       vars:
         check_kind: StatefulSet
         check_namespace: "{{ inventory_hostname }}-jukebox"
@@ -172,3 +176,24 @@
         - "{{ inventory_hostname }}-prod"
       loop_control:
         loop_var: loop_env
+
+    - name: '## 4.3. Check for Prometheus Alert Manager Configuration ##' 
+      ansible.builtin.include_tasks: check_objects.yml
+      vars:
+        check_api_version: monitoring.coreos.com/v1beta1
+        check_kind: AlertmanagerConfig
+        check_namespace: "{{ loop_env }}"
+        check_loop_items:
+          - "jukebox-alerting"
+      loop:
+        - "{{ inventory_hostname }}-test"
+        - "{{ inventory_hostname }}-prod"
+      loop_control:
+        loop_var: loop_env
+
+- name: Show the survivor scores
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: "Calculating..."
+      ansible.builtin.debug: msg="{{ inventory_hostname }} has {{ score }} points"
