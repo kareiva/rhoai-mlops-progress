@@ -1,5 +1,5 @@
 ---
-- name: "Retrieve wanted resources"
+- name: "Retrieving objects of type {{ check_kind }} from OpenShift..."
   kubernetes.core.k8s_info:
     api_version: "{{ check_api_version | default(omit) }}"
     kind: "{{ check_kind }}"
@@ -10,12 +10,28 @@
   loop_control:
     label: "{{ item }}"
 
-- name: "Fail if items are not found"
+- name: "This will fail if required {{ check_kind }} is not found"
   ansible.builtin.fail:
-    msg: "Failed item is {{ check_kind }} in namespace {{ check_namespace }}"
+    msg: "Missing item: {{ check_kind }}/{{ item.item }} --namespace {{ check_namespace }}"
   loop: "{{ check_list['results'] }}"
   loop_control:
     label: "{{ item['item'] }}"
   when: ("resources" not in item) or (item['resources'] | length == 0)
+  ignore_errors: True
 
+- name: "Scoring {{ inventory_hostname }} ..."
+  ansible.builtin.set_fact: 
+    score: "{{ score | int + item['resources'] | length }}"
+  loop: "{{ check_list['results'] }}"
+  loop_control:
+    label: "{{ item['item'] }}"
+  when: 
+    - ("resources" in item)
+    - (item['resources'] | length) > 0
 
+- name: "Update scoring file"
+  ansible.builtin.template:
+    dest: ./scoreboard.txt
+    src: scoreboard.j2 
+  delegate_to: localhost
+  run_once: true

@@ -1,0 +1,7 @@
+AI500 SCOREBOARD!!!
+---------------------
+{% set emoji = '🤖;🧠;👾;🏻;💻;💡;🦄;🍭;💾;'.split(';') %}
+{% for host in groups['all'] %}
+[{{ hostvars[host]['inventory_hostname'] }}]: {% for var in range(0, hostvars[host]['score']) %}#{% endfor %} {{ emoji[host[4]|int-1] }} ({{ hostvars[host]['score'] }})
+
+{% endfor %}
