@@ -1,2 +1,2 @@
 [all]
-user[1:7] ansible_host=localhost
+user[1:9] ansible_host=localhost
